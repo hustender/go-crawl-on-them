@@ -2,27 +2,30 @@ package main
 
 import (
 	"fmt"
+	"golang.org/x/net/context"
 	"golang.org/x/net/html"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 )
 
-const baseURL = "https://sdasdas.asd/"
+const baseURL = "https://scrape-me.dreamsofcode.io/"
 
 func main() {
 	visited := make(map[string]bool)  // To keep track of visited URLs
 	dead := make(map[string][]string) // Dead references
 
+	// goroutines
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
-	crawl(baseURL, baseURL, visited, dead, &mu, &wg)
+	crawl(baseURL, baseURL, visited, dead, &mu, &wg) // Begin crawling
+	wg.Wait()                                        // Let goroutines finish
 
-	wg.Wait()
-	printMap(dead, "Site", "Link")
+	printMap(dead, "Site", "Link") // Print results
 }
 
 // Crawl a URL and recursively fetch links
@@ -31,12 +34,6 @@ func crawl(prev string, currentURL string, visited map[string]bool, dead map[str
 	if visited[currentURL] {
 		mu.Unlock()
 		return // Skip already visited URLs
-	}
-
-	continueCrawl := true
-
-	if !strings.Contains(currentURL, baseURL) {
-		continueCrawl = false
 	}
 
 	visited[currentURL] = true // Mark URL as visited
@@ -60,37 +57,70 @@ func crawl(prev string, currentURL string, visited map[string]bool, dead map[str
 
 		// Recursively crawl each extracted link
 		for _, href := range hrefs {
-			if !continueCrawl {
-				return
+			if !strings.Contains(currentURL, baseURL) {
+				return // We still want a reference to a different website to be saved but not to be crawled
 			}
-			crawl(currentURL, href, visited, dead, mu, wg)
+			crawl(currentURL, href, visited, dead, mu, wg) // Crawl this website too!
 		}
 	}()
 }
 
 // Fetch the content of a URL
 func getContent(prev string, pageURL string, dead map[string][]string) string {
-	response, err := http.Get(pageURL)
+	response, err := request(pageURL) // Request to the url
+
+	// Error handling
 	if err != nil {
-		fmt.Println("Error fetching URL:", err)
-		Dead(dead, prev, pageURL)
+		fmt.Printf("Error fetching URL '%s': %s\n", pageURL, err)
+		deadLink(dead, prev, pageURL) // Dead link
 		return ""
 	}
 	if response.StatusCode >= 400 {
-		Dead(dead, prev, pageURL)
+		deadLink(dead, prev, pageURL)
 		return ""
 	}
+
+	// Read response body
 	body, err := io.ReadAll(response.Body)
+	// Error handling
 	if err != nil {
 		fmt.Println("Error reading response body:", err)
-		Dead(dead, prev, pageURL)
+		deadLink(dead, prev, pageURL)
 		return ""
 	}
-	return string(body)
+	return string(body) // Return body content
 }
 
-func Dead(dead map[string][]string, prev string, pageURL string) {
-	dead[prev] = append(dead[prev], pageURL)
+// Request to the url
+func request(pageURL string) (*http.Response, error) {
+	// Response
+	type ResponseResult struct {
+		Response *http.Response
+		Err      error
+	}
+
+	// Timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	resultChan := make(chan ResponseResult, 1)
+
+	// Handle possible timeout
+	go func() {
+		response, err := http.Get(pageURL)
+		resultChan <- ResponseResult{response, err}
+	}()
+	select {
+	case <-ctx.Done():
+		return nil, http.ErrHandlerTimeout
+	case result := <-resultChan:
+		return result.Response, result.Err
+	}
+}
+
+// Marks a link as dead
+func deadLink(dead map[string][]string, prev string, pageURL string) {
+	dead[prev] = append(dead[prev], pageURL) // Append dead link
 }
 
 // Extract hrefs from HTML and resolve them to absolute URLs
@@ -142,12 +172,14 @@ func resolveURL(base, href string) string {
 	return baseURL.ResolveReference(hrefURL).String()
 }
 
+// Prints the results
 func printMap(m map[string][]string, key string, value string) {
 	if len(m) == 0 {
 		fmt.Println("No dead links found!")
 		return
 	}
 
+	// Pretty printing
 	var maxLenKey int
 	for k, _ := range m {
 		if len(k) > maxLenKey {
