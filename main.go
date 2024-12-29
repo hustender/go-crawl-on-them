@@ -2,19 +2,46 @@ package main
 
 import (
 	"fmt"
+	"github.com/spf13/cobra"
 	"golang.org/x/net/context"
 	"golang.org/x/net/html"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
 )
 
-const baseURL = "https://scrape-me.dreamsofcode.io/"
-
 func main() {
+
+	// Execute
+	var rootCmd = &cobra.Command{
+		Use:     "crawl",
+		Aliases: []string{"go-crawl-on-them"},
+		Short:   "go-crawl-on-them is a basic web-crawler designed to find dead links inside a website",
+		Run: func(cmd *cobra.Command, args []string) {
+			if len(args) == 0 {
+				fmt.Println("Usage: crawl <url>")
+				return
+			}
+			baseURL = args[0]
+			fmt.Printf("Crawling: '%s'\n", baseURL)
+			run()
+		},
+	}
+
+	// Error Handling
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+}
+
+var baseURL string
+
+func run() {
 	visited := make(map[string]bool)  // To keep track of visited URLs
 	dead := make(map[string][]string) // Dead references
 
@@ -39,7 +66,7 @@ func crawl(prev string, currentURL string, visited map[string]bool, dead map[str
 	visited[currentURL] = true // Mark URL as visited
 	mu.Unlock()
 
-	fmt.Printf("Checking %s for dead links..\n", currentURL)
+	fmt.Printf("Checking '%s' for dead links..\n", currentURL)
 
 	wg.Add(1)
 
@@ -181,7 +208,7 @@ func printMap(m map[string][]string, key string, value string) {
 
 	// Pretty printing
 	var maxLenKey int
-	for k, _ := range m {
+	for k := range m {
 		if len(k) > maxLenKey {
 			maxLenKey = len(k)
 		}
