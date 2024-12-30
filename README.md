@@ -66,9 +66,14 @@ PowerShell:
 ```powershell
 go build -o "$(go env GOPATH)\bin\crawl.exe"
 ```
-3. **Run the program**:
+Command Prompt:
 ```cmd
 go build -o %GOPATH%\bin\crawl.exe
+```
+
+3. **Run the program**:
+```bash
+crawl <url>
 ```
 
 ## Example
