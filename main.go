@@ -14,13 +14,11 @@ import (
 	"time"
 )
 
-func main() {
-
+func Main() {
 	// Execute
 	var rootCmd = &cobra.Command{
-		Use:     "crawl",
-		Aliases: []string{"go-crawl-on-them"},
-		Short:   "go-crawl-on-them is a basic web-crawler designed to find dead links inside a website",
+		Use:   "crawl",
+		Short: "go-crawl-on-them is a basic web-crawler designed to find dead links inside a website",
 		Run: func(cmd *cobra.Command, args []string) {
 			if len(args) == 0 {
 				fmt.Println("Usage: crawl <url>")
